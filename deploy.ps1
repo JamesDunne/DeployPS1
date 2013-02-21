@@ -11,7 +11,7 @@ Param (
 
 Import-Module WebAdministration;
 
-# Custom web.config modifications:
+# Sets appSettings/CurrentEnvironment value
 function Config-Set-CurrentEnvironment ( [System.Xml.XmlDocument]$doc )
 {
     $root = $doc.get_DocumentElement();
@@ -25,6 +25,7 @@ function Config-Set-CurrentEnvironment ( [System.Xml.XmlDocument]$doc )
     }
 }
 
+# Do various updates to web.config/app.config files:
 function Config-Update ( $path )
 {
     # Find web.config:
@@ -68,6 +69,7 @@ function Config-Update ( $path )
     }
 }
 
+# Clears out the $dest folder and xcopies from $src
 function Clear-And-Copy ( $src, $dest )
 {
     # Clear out the target directory:
@@ -84,6 +86,7 @@ function Clear-And-Copy ( $src, $dest )
     xcopy $src $dest /E /I /C /Q;
 }
 
+# Handles a deployment to an IIS site, including xcopy and web.config updates
 function Deploy-Site ( $ws, $destRelPath, $srcAbsPath )
 {
     $siteName = $ws.Name;
@@ -104,6 +107,7 @@ function Deploy-Site ( $ws, $destRelPath, $srcAbsPath )
     "    Deployed to $siteName";
 }
 
+# Verifies that a local IIS website exists with the given $name
 function Require-IIS-Website ( $name )
 {
     $ws = Get-Website -Name $name;
@@ -116,6 +120,7 @@ function Require-IIS-Website ( $name )
     return $ws;
 }
 
+# Verifies that a required source path exists, else throws an error
 function Require-Path-Exists ( $path )
 {
     if ( -not [System.IO.Directory]::Exists( $path ) ) {
@@ -123,6 +128,7 @@ function Require-Path-Exists ( $path )
     }
 }
 
+# Process a "WebSites" deployment rule and controls IIS with stop/start commands
 function Deploy-WebSites ( $dp )
 {
     $tfsBuildName = $dp["TFSBuildName"];
@@ -197,6 +203,7 @@ function Deploy-WebSites ( $dp )
     "Deployed WebSites";
 }
 
+# Handles a "Folders" deployment rule with simple xcopy commands
 function Deploy-Folders ($dp)
 {
     $tfsBuildName = $dp["TFSBuildName"];
@@ -240,9 +247,13 @@ function Deploy-Folders ($dp)
     "Deployed Folders";
 }
 
+
+
 #
-# Script Starts Here:
+# Main script starts here:
 #
+
+
 
 # Execute the deployment configuration script which sets $Deploy:
 $Deploy = $null;
@@ -252,6 +263,7 @@ if (!$ConfigScriptPath) {
     exit;
 }
 
+# Execute the script we're given to get the $Deploy hash:
 . $ConfigScriptPath
 
 if ( ($Deploy -eq $null) ) {
@@ -259,30 +271,37 @@ if ( ($Deploy -eq $null) ) {
     exit;
 }
 
+
 $BuildsDropPath  = $Deploy["BuildsDropPath"];
 $EnvironmentName = $Deploy["EnvironmentName"];
 
 $MachineName = Get-Content env:computername;
 
+
 "Deploying for $EnvironmentName environment on $MachineName machine";
 
+# Handle all deployment rules in the $Deploy hash:
 foreach ($dp in $Deploy["Deployments"]) {
     if ($dp["Disabled"]) {
         "";
-        "  Skipping deployment from '$($dp["TFSBuildName"])' due to Disabled = `$true";
+        "  Skipping deployment from '$($dp["TFSBuildName"])' because its rule has Disabled = `$true";
         continue;
     }
 
     # Deploy WebSites:
     try {
-        if ($dp["WebSites"]) { Deploy-WebSites $dp; }
+        if ($dp["WebSites"]) {
+            Deploy-WebSites $dp;
+        }
     } catch {
         "$_";
     }
 
     # Deploy Folders:
     try {
-        if ($dp["Folders"])  { Deploy-Folders $dp; }
+        if ($dp["Folders"])  {
+            Deploy-Folders $dp;
+        }
     } catch {
         "$_";
     }
